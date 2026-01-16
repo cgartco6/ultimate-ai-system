@@ -1,0 +1,108 @@
+[Unit]
+Description=Ultimate AI System Backend
+After=network.target postgresql.service redis.service
+Requires=postgresql.service redis.service
+Wants=ultimate-ai-celery.service ultimate-ai-celery-beat.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+
+User=ultimate-ai
+Group=ultimate-ai
+WorkingDirectory=/opt/ultimate-ai-system/backend
+
+# Environment
+Environment="PATH=/opt/ultimate-ai-system/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/ultimate-ai-system/backend"
+EnvironmentFile=/opt/ultimate-ai-system/.env
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ultimate-ai-system/data /var/log/ultimate-ai
+InaccessiblePaths=/boot /etc/ssh
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=65536
+LimitCORE=infinity
+LimitMEMLOCK=infinity
+LimitSTACK=infinity
+LimitRSS=infinity
+LimitAS=infinity
+LimitFSIZE=infinity
+LimitCPU=infinity
+LimitSIGPENDING=65536
+LimitMSGQUEUE=819200
+LimitNICE=0
+LimitRTPRIO=0
+LimitRTTIME=infinity
+
+# Process management
+OOMScoreAdjust=-100
+Nice=0
+IOSchedulingClass=best-effort
+IOSchedulingPriority=0
+CPUSchedulingPolicy=other
+CPUSchedulingPriority=0
+UMask=0027
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ultimate-ai-backend
+SyslogFacility=daemon
+SyslogLevel=info
+LogLevelMax=debug
+
+# Main process
+ExecStart=/opt/ultimate-ai-system/venv/bin/gunicorn \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 4 \
+    --threads 2 \
+    --bind unix:/run/ultimate-ai/backend.sock \
+    --bind 0.0.0.0:8000 \
+    --timeout 120 \
+    --keepalive 5 \
+    --max-requests 10000 \
+    --max-requests-jitter 1000 \
+    --log-level info \
+    --access-logfile /var/log/ultimate-ai/backend-access.log \
+    --error-logfile /var/log/ultimate-ai/backend-error.log \
+    --capture-output \
+    --enable-stdio-inheritance \
+    --chdir /opt/ultimate-ai-system/backend \
+    app.main:app
+
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+TimeoutStopSec=30
+
+# Socket activation (optional)
+# ListenStream=/run/ultimate-ai/backend.sock
+# SocketUser=ultimate-ai
+# SocketGroup=ultimate-ai
+# SocketMode=0660
+
+[Install]
+WantedBy=multi-user.target
